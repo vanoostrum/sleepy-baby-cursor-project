@@ -40,7 +40,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "jest"
+    "test": "TZ=UTC NODE_OPTIONS=--experimental-sqlite jest"
   },
   "private": true
 }
