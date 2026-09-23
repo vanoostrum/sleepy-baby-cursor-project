@@ -23,6 +23,9 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -38,6 +41,14 @@ jobs:
         run: npx expo prebuild --platform android --non-interactive
         env:
           EXPO_NO_TELEMETRY: 1
+          CI: 1
+      - name: Install Android SDK packages
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME" -type f -name sdkmanager | head -1)"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
+      - name: Build the Android test APK
+        run: npx detox build --configuration android.emu.release
       - name: Run Detox on an emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -48,6 +59,4 @@ jobs:
           avd-name: SleepyBaby_API_34
           disable-animations: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          script: |
-            npx detox build --configuration android.emu.release
-            npx detox test --configuration android.emu.release --cleanup
+          script: npx detox test --configuration android.att.release --loglevel verbose
