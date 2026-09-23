@@ -1,0 +1,13 @@
+---
+description: Read and follow the bstack skill for every engineering task
+alwaysApply: true
+---
+
+For every engineering task, read and follow the bstack skill before acting. Do not change that skill.
+
+Read the first file that exists:
+
+- `.cursor/skills/bstack/SKILL.md` in the workspace
+- `/home/ubuntu/.cursor/skills/bstack/SKILL.md`
+
+Follow it in full. Prefer the parent agent. One helper subagent is allowed. Do not create 2 or more subagents toward the same goal without explicit user approval immediately beforehand.
