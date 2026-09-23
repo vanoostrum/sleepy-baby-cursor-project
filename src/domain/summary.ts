@@ -48,6 +48,15 @@ export function dayKeyFromDate(date: Date): DayKey {
   return asDayKey(`${date.getFullYear()}-${month}-${day}`);
 }
 
+export function ageLabel(ageMonths: number): string {
+  const months = Math.max(0, Math.floor(ageMonths));
+  if (months < 24) {
+    return months === 1 ? '1 month' : `${months} months`;
+  }
+  const years = Math.floor(months / 12);
+  return years === 1 ? '1 year' : `${years} years`;
+}
+
 export function ageInMonths(birthday: DayKey, on: Date): number {
   const year = Number(birthday.slice(0, 4));
   const month = Number(birthday.slice(5, 7));

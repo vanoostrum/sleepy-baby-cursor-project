@@ -29,10 +29,13 @@ export type SqlValue = string | number | null;
 export type SqlParams = Record<string, SqlValue>;
 
 export interface SqlDb {
-  exec(sql: string): void;
-  run(sql: string, params?: SqlParams): void;
-  all(sql: string, params?: SqlParams): Record<string, SqlValue>[];
-  get(sql: string, params?: SqlParams): Record<string, SqlValue> | undefined;
+  exec(sql: string): Promise<void>;
+  run(sql: string, params?: SqlParams): Promise<void>;
+  all(sql: string, params?: SqlParams): Promise<Record<string, SqlValue>[]>;
+  get(
+    sql: string,
+    params?: SqlParams,
+  ): Promise<Record<string, SqlValue> | undefined>;
 }
 
 export type StoreError =
@@ -73,21 +76,24 @@ export type Histogram = {
 };
 
 export type SleepLog = {
-  listKids(): Kid[];
-  activeKid(): Kid | null;
-  addKid(input: NewKid): StoreResult<Kid>;
-  setActiveKid(id: KidId): StoreResult<Kid>;
-  openSession(kidId: KidId): SleepSession | null;
-  startSleep(kidId: KidId, kind: SleepKind): StoreResult<SleepSession>;
-  stopSleep(kidId: KidId): StoreResult<SleepSession>;
-  day(kidId: KidId, day: string): StoreResult<DaySummary>;
-  correctSession(id: SessionId, patch: SessionPatch): StoreResult<SleepSession>;
-  removeSession(id: SessionId): StoreResult<SleepSession>;
+  listKids(): Promise<Kid[]>;
+  activeKid(): Promise<Kid | null>;
+  addKid(input: NewKid): Promise<StoreResult<Kid>>;
+  setActiveKid(id: KidId): Promise<StoreResult<Kid>>;
+  openSession(kidId: KidId): Promise<SleepSession | null>;
+  startSleep(kidId: KidId, kind: SleepKind): Promise<StoreResult<SleepSession>>;
+  stopSleep(kidId: KidId): Promise<StoreResult<SleepSession>>;
+  day(kidId: KidId, day: string): Promise<StoreResult<DaySummary>>;
+  correctSession(
+    id: SessionId,
+    patch: SessionPatch,
+  ): Promise<StoreResult<SleepSession>>;
+  removeSession(id: SessionId): Promise<StoreResult<SleepSession>>;
   histogram(
     kidId: KidId,
     grain: 'week' | 'month',
     count: number,
-  ): StoreResult<Histogram>;
+  ): Promise<StoreResult<Histogram>>;
 };
 
 const ACTIVE_KEY = 'activeKidId';
@@ -187,15 +193,15 @@ function readSession(row: SqlRow): SleepSession {
   };
 }
 
-export function createSleepLog(
+export async function createSleepLog(
   db: SqlDb,
   clock: () => Date,
   newId: () => string,
-): SleepLog {
-  db.exec(SCHEMA);
+): Promise<SleepLog> {
+  await db.exec(SCHEMA);
 
-  function kidById(id: string): Kid | undefined {
-    const row = db.get(
+  async function kidById(id: string): Promise<Kid | undefined> {
+    const row = await db.get(
       'SELECT id, name, gender, birthday, icon FROM kids WHERE id = $id',
       {
         $id: id,
@@ -204,54 +210,62 @@ export function createSleepLog(
     return row ? readKid(row) : undefined;
   }
 
-  function sessionById(id: string): SleepSession | undefined {
-    const row = db.get(
+  async function sessionById(id: string): Promise<SleepSession | undefined> {
+    const row = await db.get(
       'SELECT id, kid_id, kind, started_at, ended_at FROM sessions WHERE id = $id',
       { $id: id },
     );
     return row ? readSession(row) : undefined;
   }
 
-  function sessionsBetween(
+  async function sessionsBetween(
     kidId: KidId,
     rangeStart: Date,
     rangeEnd: Date,
-  ): SleepSession[] {
-    return db
-      .all(
-        `SELECT id, kid_id, kind, started_at, ended_at
-         FROM sessions
-         WHERE kid_id = $kidId
-           AND started_at < $rangeEnd
-           AND (ended_at IS NULL OR ended_at >= $rangeStart)
-         ORDER BY started_at`,
-        {
-          $kidId: kidId,
-          $rangeStart: rangeStart.toISOString(),
-          $rangeEnd: rangeEnd.toISOString(),
-        },
-      )
-      .map(readSession);
+  ): Promise<SleepSession[]> {
+    const rows = await db.all(
+      `SELECT id, kid_id, kind, started_at, ended_at
+       FROM sessions
+       WHERE kid_id = $kidId
+         AND started_at < $rangeEnd
+         AND (ended_at IS NULL OR ended_at >= $rangeStart)
+       ORDER BY started_at`,
+      {
+        $kidId: kidId,
+        $rangeStart: rangeStart.toISOString(),
+        $rangeEnd: rangeEnd.toISOString(),
+      },
+    );
+    return rows.map(readSession);
+  }
+
+  async function openSession(kidId: KidId): Promise<SleepSession | null> {
+    const row = await db.get(
+      `SELECT id, kid_id, kind, started_at, ended_at
+       FROM sessions
+       WHERE kid_id = $kidId AND ended_at IS NULL`,
+      { $kidId: kidId },
+    );
+    return row ? readSession(row) : null;
   }
 
   return {
-    listKids() {
-      return db
-        .all(
-          'SELECT id, name, gender, birthday, icon FROM kids ORDER BY name, id',
-        )
-        .map(readKid);
+    async listKids() {
+      const rows = await db.all(
+        'SELECT id, name, gender, birthday, icon FROM kids ORDER BY name, id',
+      );
+      return rows.map(readKid);
     },
 
-    activeKid() {
-      const row = db.get('SELECT value FROM settings WHERE key = $key', {
+    async activeKid() {
+      const row = await db.get('SELECT value FROM settings WHERE key = $key', {
         $key: ACTIVE_KEY,
       });
       const value = row ? text(row, 'value') : null;
-      return value ? (kidById(value) ?? null) : null;
+      return value ? ((await kidById(value)) ?? null) : null;
     },
 
-    addKid(input) {
+    async addKid(input) {
       const name = input.name.trim();
       if (!name) {
         return fail('empty-name');
@@ -273,7 +287,7 @@ export function createSleepLog(
         return fail('future-birthday');
       }
       const id = asKidId(newId());
-      db.run(
+      await db.run(
         'INSERT INTO kids (id, name, gender, birthday, icon) VALUES ($id, $name, $gender, $birthday, $icon)',
         {
           $id: id,
@@ -283,14 +297,20 @@ export function createSleepLog(
           $icon: input.icon,
         },
       );
-      const active = db.get('SELECT value FROM settings WHERE key = $key', {
-        $key: ACTIVE_KEY,
-      });
-      if (!active) {
-        db.run('INSERT INTO settings (key, value) VALUES ($key, $value)', {
+      const active = await db.get(
+        'SELECT value FROM settings WHERE key = $key',
+        {
           $key: ACTIVE_KEY,
-          $value: id,
-        });
+        },
+      );
+      if (!active) {
+        await db.run(
+          'INSERT INTO settings (key, value) VALUES ($key, $value)',
+          {
+            $key: ACTIVE_KEY,
+            $value: id,
+          },
+        );
       }
       return ok({
         id,
@@ -301,70 +321,62 @@ export function createSleepLog(
       });
     },
 
-    setActiveKid(id) {
-      const kid = kidById(id);
+    async setActiveKid(id) {
+      const kid = await kidById(id);
       if (!kid) {
         return fail('missing-kid');
       }
-      db.run(
+      await db.run(
         'INSERT INTO settings (key, value) VALUES ($key, $value) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
         { $key: ACTIVE_KEY, $value: id },
       );
       return ok(kid);
     },
 
-    openSession(kidId) {
-      const row = db.get(
-        `SELECT id, kid_id, kind, started_at, ended_at
-         FROM sessions
-         WHERE kid_id = $kidId AND ended_at IS NULL`,
-        { $kidId: kidId },
-      );
-      return row ? readSession(row) : null;
-    },
+    openSession,
 
-    startSleep(kidId, kind) {
-      if (!kidById(kidId)) {
+    async startSleep(kidId, kind) {
+      if (!(await kidById(kidId))) {
         return fail('missing-kid');
       }
-      if (this.openSession(kidId)) {
+      if (await openSession(kidId)) {
         return fail('already-asleep');
       }
       const id = asSessionId(newId());
       const startedAt = clock().toISOString();
-      db.run(
+      await db.run(
         'INSERT INTO sessions (id, kid_id, kind, started_at, ended_at) VALUES ($id, $kidId, $kind, $startedAt, NULL)',
         { $id: id, $kidId: kidId, $kind: kind, $startedAt: startedAt },
       );
       return ok({ id, kidId, kind, startedAt, endedAt: null });
     },
 
-    stopSleep(kidId) {
-      const open = this.openSession(kidId);
+    async stopSleep(kidId) {
+      const open = await openSession(kidId);
       if (!open) {
         return fail('not-asleep');
       }
-      const endedAt = clock().toISOString();
+      let endedAt = clock().toISOString();
       if (Date.parse(endedAt) <= Date.parse(open.startedAt)) {
-        return fail('bad-range');
+        endedAt = new Date(Date.parse(open.startedAt) + 1000).toISOString();
       }
-      db.run('UPDATE sessions SET ended_at = $endedAt WHERE id = $id', {
+      await db.run('UPDATE sessions SET ended_at = $endedAt WHERE id = $id', {
         $endedAt: endedAt,
         $id: open.id,
       });
       return ok({ ...open, endedAt });
     },
 
-    day(kidId, dayText) {
+    async day(kidId, dayText) {
       const day = parseDayKey(dayText);
       if (!day) {
         return fail('bad-day');
       }
-      if (!kidById(kidId)) {
+      if (!(await kidById(kidId))) {
         return fail('missing-kid');
       }
       const start = dayStart(day);
-      const sessions = sessionsBetween(
+      const sessions = await sessionsBetween(
         kidId,
         new Date(start.getTime() - 36 * 60 * 60 * 1000),
         addDays(start, 1),
@@ -372,8 +384,8 @@ export function createSleepLog(
       return ok(summarizeDay(sessions, day, clock()));
     },
 
-    correctSession(id, patch) {
-      const existing = sessionById(id);
+    async correctSession(id, patch) {
+      const existing = await sessionById(id);
       if (!existing) {
         return fail('missing-session');
       }
@@ -390,13 +402,13 @@ export function createSleepLog(
         if (Date.parse(endedAt) <= Date.parse(startedAt)) {
           return fail('bad-range');
         }
-      } else if (
-        this.openSession(existing.kidId)?.id !== existing.id &&
-        this.openSession(existing.kidId)
-      ) {
-        return fail('already-asleep');
+      } else {
+        const open = await openSession(existing.kidId);
+        if (open && open.id !== existing.id) {
+          return fail('already-asleep');
+        }
       }
-      db.run(
+      await db.run(
         'UPDATE sessions SET kind = $kind, started_at = $startedAt, ended_at = $endedAt WHERE id = $id',
         {
           $kind: patch.kind,
@@ -408,17 +420,17 @@ export function createSleepLog(
       return ok({ ...existing, kind: patch.kind, startedAt, endedAt });
     },
 
-    removeSession(id) {
-      const existing = sessionById(id);
+    async removeSession(id) {
+      const existing = await sessionById(id);
       if (!existing) {
         return fail('missing-session');
       }
-      db.run('DELETE FROM sessions WHERE id = $id', { $id: id });
+      await db.run('DELETE FROM sessions WHERE id = $id', { $id: id });
       return ok(existing);
     },
 
-    histogram(kidId, grain, countArg) {
-      const kid = kidById(kidId);
+    async histogram(kidId, grain, countArg) {
+      const kid = await kidById(kidId);
       if (!kid) {
         return fail('missing-kid');
       }
@@ -427,19 +439,21 @@ export function createSleepLog(
       const recommendation = recommendationForAge(
         ageInMonths(kid.birthday, now),
       );
+      const weekStart = startOfWeek(now);
+      const monthStart = startOfMonth(now);
       const rangeStart =
         grain === 'week'
-          ? addDays(startOfWeek(now), -7 * (count - 1))
+          ? addDays(weekStart, -7 * (count - 1))
           : new Date(
-              startOfMonth(now).getFullYear(),
-              startOfMonth(now).getMonth() - (count - 1),
+              monthStart.getFullYear(),
+              monthStart.getMonth() - (count - 1),
               1,
             );
       const rangeEnd =
         grain === 'week'
-          ? addDays(startOfWeek(now), 7)
+          ? addDays(weekStart, 7)
           : new Date(now.getFullYear(), now.getMonth() + 1, 1);
-      const sessions = sessionsBetween(
+      const sessions = await sessionsBetween(
         kidId,
         new Date(rangeStart.getTime() - 36 * 60 * 60 * 1000),
         rangeEnd,

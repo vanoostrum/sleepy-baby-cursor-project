@@ -32,20 +32,22 @@ function readRows(value: unknown): Record<string, SqlValue>[] {
   });
 }
 
-export function openSleepLog(clock: () => Date = () => new Date()): SleepLog {
-  const database = SQLite.openDatabaseSync('sleepy-baby.db');
+export async function openSleepLog(
+  clock: () => Date = () => new Date(),
+): Promise<SleepLog> {
+  const database = await SQLite.openDatabaseAsync('sleepy-baby.db');
   const db: SqlDb = {
-    exec(sql) {
-      database.execSync(sql);
+    async exec(sql) {
+      await database.execAsync(sql);
     },
-    run(sql, params: SqlParams = {}) {
-      database.runSync(sql, params);
+    async run(sql, params: SqlParams = {}) {
+      await database.runAsync(sql, params);
     },
-    all(sql, params: SqlParams = {}) {
-      return readRows(database.getAllSync(sql, params));
+    async all(sql, params: SqlParams = {}) {
+      return readRows(await database.getAllAsync(sql, params));
     },
-    get(sql, params: SqlParams = {}) {
-      return readRows(database.getAllSync(sql, params))[0];
+    async get(sql, params: SqlParams = {}) {
+      return readRows(await database.getAllAsync(sql, params))[0];
     },
   };
   return createSleepLog(db, clock, () => crypto.randomUUID());

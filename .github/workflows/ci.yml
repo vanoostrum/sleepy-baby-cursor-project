@@ -19,3 +19,35 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm test
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci
+      - name: Generate the Android project
+        run: npx expo prebuild --platform android --non-interactive
+        env:
+          EXPO_NO_TELEMETRY: 1
+      - name: Run Detox on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: default
+          arch: x86_64
+          profile: pixel_6
+          avd-name: SleepyBaby_API_34
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: |
+            npx detox build --configuration android.emu.release
+            npx detox test --configuration android.emu.release --cleanup
