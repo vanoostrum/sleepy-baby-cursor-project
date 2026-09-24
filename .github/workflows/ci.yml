@@ -48,7 +48,9 @@ jobs:
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
       - name: Build the Android test APK
-        run: npx detox build --configuration android.emu.release
+        run: |
+          npx detox build --configuration android.emu.release
+          ls -lh android/app/build/outputs/apk/release/app-release.apk android/app/build/outputs/apk/androidTest/release/app-release-androidTest.apk
       - name: Run Detox on an emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -59,4 +61,16 @@ jobs:
           avd-name: SleepyBaby_API_34
           disable-animations: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          script: npx detox test --configuration android.att.release --loglevel verbose
+          script: |
+            set -eu
+            adb -s emulator-5554 wait-for-device
+            adb -s emulator-5554 shell 'while [ "$(getprop sys.boot_completed)" != "1" ]; do sleep 2; done'
+            install_apk() {
+              name="$(basename "$1")"
+              timeout 600 adb -s emulator-5554 push "$1" "/data/local/tmp/$name"
+              timeout 600 adb -s emulator-5554 shell pm install -r -g -t "/data/local/tmp/$name"
+              adb -s emulator-5554 shell rm -f "/data/local/tmp/$name"
+            }
+            install_apk android/app/build/outputs/apk/release/app-release.apk
+            install_apk android/app/build/outputs/apk/androidTest/release/app-release-androidTest.apk
+            npx detox test --configuration android.att.release --loglevel verbose --reuse

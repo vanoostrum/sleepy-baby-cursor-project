@@ -43,6 +43,11 @@ module.exports = {
     'android.att.release': {
       device: 'attached',
       app: 'android.release',
+      behavior: {
+        init: {
+          reinstallApp: false,
+        },
+      },
     },
   },
 };
