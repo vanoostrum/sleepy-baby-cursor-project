@@ -1,0 +1,161 @@
+const { execFileSync } = require('child_process');
+
+function adb(args) {
+  const home = process.env.ANDROID_HOME || '/usr/local/lib/android/sdk';
+  try {
+    return execFileSync(
+      `${home}/platform-tools/adb`,
+      ['-s', 'emulator-5554', ...args],
+      {
+        encoding: 'utf8',
+        maxBuffer: 10 * 1024 * 1024,
+      },
+    );
+  } catch (error) {
+    const stdout = error.stdout ? String(error.stdout) : '';
+    const stderr = error.stderr ? String(error.stderr) : '';
+    return `${stdout}\n${stderr}\n${error.message}`;
+  }
+}
+
+function dismissKeyguard() {
+  adb(['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP']);
+  adb(['shell', 'wm', 'dismiss-keyguard']);
+  adb(['shell', 'input', 'keyevent', '82']);
+}
+
+async function logKidNameCase() {
+  try {
+    const attrs = await element(by.id('active-kid-name')).getAttributes();
+    const frame = attrs.frame || { x: 0, y: 0, width: 0, height: 0 };
+    const text = attrs.text || '';
+    if (frame.width > 360 || frame.height > 96) {
+      console.log(
+        `active-kid-name is on a large parent (${frame.width}x${frame.height}, text="${text}")`,
+      );
+    } else {
+      console.log(
+        `active-kid-name is on the text node (${frame.width}x${frame.height} at ${frame.x},${frame.y}, text="${text}") and less than 75 percent of that node is inside the screen`,
+      );
+    }
+  } catch (error) {
+    const message = String(error.message || error);
+    const ids = [
+      ...new Set(
+        [...message.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]),
+      ),
+    ];
+    console.log(
+      ids.length
+        ? `testIDs in hierarchy: ${ids.join(', ')}`
+        : 'testIDs in hierarchy: none',
+    );
+    console.log(
+      'active-kid-name is absent, save did not reach the home screen',
+    );
+  }
+}
+
+function reportForeignFocus() {
+  const dump = adb(['shell', 'dumpsys', 'window']);
+  const current = dump
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.startsWith('mCurrentFocus='));
+  const name = current ? current.slice('mCurrentFocus='.length) : 'unknown';
+  if (name.includes('com.sleepybaby.app')) {
+    return;
+  }
+  console.log('----- focused window -----');
+  console.log(`focused window: ${name}`);
+  console.log(dump);
+}
+
+describe('SleepyBaby', () => {
+  beforeAll(async () => {
+    dismissKeyguard();
+    await device.launchApp({
+      newInstance: true,
+      launchArgs: { detoxEnableSynchronization: 0 },
+    });
+    await device.disableSynchronization();
+    dismissKeyguard();
+    reportForeignFocus();
+  });
+
+  it('records a nap, corrects it, and shows the recommended range', async () => {
+    await waitFor(element(by.id('add-kid')))
+      .toBeVisible()
+      .withTimeout(20000);
+    await element(by.id('add-kid')).tap();
+
+    await waitFor(element(by.id('new-kid-screen')))
+      .toBeVisible()
+      .withTimeout(10000);
+    await waitFor(element(by.id('kid-name')))
+      .toBeVisible()
+      .withTimeout(10000);
+    await element(by.id('kid-name')).replaceText('Ada');
+    await element(by.id('gender-girl')).tap();
+    await element(by.id('kid-year')).replaceText('2024');
+    await element(by.id('kid-month')).replaceText('6');
+    await element(by.id('kid-day')).replaceText('1');
+    await element(by.id('icon-star')).tap();
+    await waitFor(element(by.id('new-kid-screen')))
+      .toBeVisible()
+      .withTimeout(10000);
+    await waitFor(element(by.id('kid-save')))
+      .toBeVisible()
+      .withTimeout(10000);
+    await element(by.id('kid-save')).tap();
+
+    try {
+      await waitFor(element(by.id('active-kid-name')))
+        .toBeVisible()
+        .withTimeout(10000);
+    } catch (error) {
+      await logKidNameCase();
+      throw error;
+    }
+    await expect(element(by.id('active-kid-name'))).toHaveText('Ada');
+
+    await element(by.id('start-nap')).tap();
+    await waitFor(element(by.id('stop-sleep')))
+      .toBeVisible()
+      .withTimeout(10000);
+    await element(by.id('stop-sleep')).tap();
+    await waitFor(element(by.id('start-nap')))
+      .toBeVisible()
+      .withTimeout(10000);
+
+    await element(by.id('open-day')).tap();
+    await waitFor(element(by.id('day-total')))
+      .toBeVisible()
+      .withTimeout(10000);
+    await expect(element(by.id('day-nap'))).toBeVisible();
+    await element(by.text('Edit')).tap();
+    await element(by.id('edit-night')).tap();
+    await element(by.id('edit-save')).tap();
+    await waitFor(element(by.text('Night')))
+      .toBeVisible()
+      .withTimeout(10000);
+    await element(by.text('Remove')).tap();
+    await waitFor(element(by.text('Remove')))
+      .not.toBeVisible()
+      .withTimeout(10000);
+
+    await element(by.id('back-home')).tap();
+    await waitFor(element(by.id('open-trends')))
+      .toBeVisible()
+      .withTimeout(10000);
+    await element(by.id('open-trends')).tap();
+    await waitFor(element(by.id('recommendation-source')))
+      .toBeVisible()
+      .withTimeout(10000);
+    await expect(element(by.id('recommendation-source'))).toHaveText(
+      'Ranges for 4 months and older are from the American Academy of Sleep Medicine consensus (Paruthi et al., 2016). The 0 to 3 month range is from the National Sleep Foundation.',
+    );
+    await element(by.id('grain-month')).tap();
+    await expect(element(by.id('histogram'))).toBeVisible();
+  });
+});

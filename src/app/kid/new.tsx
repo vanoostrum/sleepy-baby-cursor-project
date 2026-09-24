@@ -1,0 +1,280 @@
+import { router, useNavigation } from 'expo-router';
+import { useRef, useState } from 'react';
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { StyleSheet } from 'react-native-unistyles';
+
+import type { Gender, IconId } from '../../domain/model';
+import { asKidId } from '../../domain/model';
+import { dayKeyFromDate } from '../../domain/summary';
+import { previewNewKid } from '../../storage/db';
+import { localId } from '../../storage/localId';
+import { useSleep } from '../../state/sleep';
+import { errorCopy } from '../../ui/errors';
+import { ICON_GLYPH, ICON_LIST } from '../../ui/icons';
+import { PrimaryButton, Screen, Title } from '../../ui/screen';
+
+const GENDERS: { id: Gender; label: string }[] = [
+  { id: 'girl', label: 'Girl' },
+  { id: 'boy', label: 'Boy' },
+  { id: 'unspecified', label: 'Skip' },
+];
+
+export default function NewKidScreen() {
+  const navigation = useNavigation();
+  const { rememberKid, persistKid } = useSleep();
+  const [name, setName] = useState('');
+  const [gender, setGender] = useState<Gender>('unspecified');
+  const [year, setYear] = useState('');
+  const [month, setMonth] = useState('');
+  const [day, setDay] = useState('');
+  const [icon, setIcon] = useState<IconId>('moon');
+  const [error, setError] = useState('');
+  const fields = useRef({
+    name: '',
+    gender: 'unspecified' as Gender,
+    year: '',
+    month: '',
+    day: '',
+    icon: 'moon' as IconId,
+  });
+
+  function updateName(value: string) {
+    fields.current.name = value;
+    setName(value);
+  }
+
+  function updateGender(value: Gender) {
+    fields.current.gender = value;
+    setGender(value);
+  }
+
+  function updateYear(value: string) {
+    fields.current.year = value;
+    setYear(value);
+  }
+
+  function updateMonth(value: string) {
+    fields.current.month = value;
+    setMonth(value);
+  }
+
+  function updateDay(value: string) {
+    fields.current.day = value;
+    setDay(value);
+  }
+
+  function updateIcon(value: IconId) {
+    fields.current.icon = value;
+    setIcon(value);
+  }
+
+  function replaceWithHome() {
+    console.info('kid-save about to replace');
+    router.replace('/');
+    const state = navigation.getState();
+    const homeName =
+      state?.routeNames.find((name) => name === 'index') ??
+      state?.routes[0]?.name ??
+      'index';
+    navigation.dispatch({
+      type: 'RESET',
+      payload: {
+        index: 0,
+        routes: [{ name: homeName }],
+      },
+    });
+  }
+
+  function save() {
+    console.info('kid-save onPress');
+    try {
+      Keyboard.dismiss();
+      const draft = fields.current;
+      const input = {
+        name: draft.name,
+        gender: draft.gender,
+        birthday: `${draft.year.padStart(4, '0')}-${draft.month.padStart(2, '0')}-${draft.day.padStart(2, '0')}`,
+        icon: draft.icon,
+      };
+      const preview = previewNewKid(input, dayKeyFromDate(new Date()));
+      if (!preview.ok) {
+        console.info(`kid-save skipped: ${preview.error}`);
+        setError(errorCopy(preview.error));
+        return;
+      }
+      rememberKid({
+        id: asKidId(localId()),
+        name: preview.value.name,
+        gender: preview.value.gender,
+        birthday: preview.value.birthday,
+        icon: preview.value.icon,
+      });
+      console.info('kid-save entered write');
+      persistKid(input);
+      replaceWithHome();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.info(`kid-save thrown: ${message}`);
+      setError(message);
+    }
+  }
+
+  return (
+    <Screen testID="new-kid-screen">
+      <KeyboardAvoidingView behavior="padding" style={styles.form}>
+        <ScrollView
+          testID="kid-form"
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          style={styles.fields}
+        >
+          <Title>Add a child</Title>
+          <TextInput
+            testID="kid-name"
+            value={name}
+            onChangeText={updateName}
+            placeholder="Name"
+            placeholderTextColor="#6E675C"
+            style={styles.input}
+          />
+          <View style={styles.row}>
+            {GENDERS.map((option) => (
+              <Pressable
+                key={option.id}
+                testID={`gender-${option.id}`}
+                onPress={() => updateGender(option.id)}
+                style={[styles.choice, gender === option.id && styles.choiceOn]}
+              >
+                <Text style={styles.choiceLabel}>{option.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <View style={styles.row}>
+            <TextInput
+              testID="kid-year"
+              value={year}
+              onChangeText={updateYear}
+              placeholder="Year"
+              keyboardType="number-pad"
+              placeholderTextColor="#6E675C"
+              style={[styles.input, styles.year]}
+            />
+            <TextInput
+              testID="kid-month"
+              value={month}
+              onChangeText={updateMonth}
+              placeholder="Month"
+              keyboardType="number-pad"
+              placeholderTextColor="#6E675C"
+              style={[styles.input, styles.datePart]}
+            />
+            <TextInput
+              testID="kid-day"
+              value={day}
+              onChangeText={updateDay}
+              placeholder="Day"
+              keyboardType="number-pad"
+              placeholderTextColor="#6E675C"
+              style={[styles.input, styles.datePart]}
+            />
+          </View>
+          <View style={styles.icons}>
+            {ICON_LIST.map((id) => (
+              <Pressable
+                key={id}
+                testID={`icon-${id}`}
+                onPress={() => updateIcon(id)}
+                style={[styles.icon, icon === id && styles.choiceOn]}
+              >
+                <Text style={styles.glyph}>{ICON_GLYPH[id]}</Text>
+              </Pressable>
+            ))}
+          </View>
+          {error ? (
+            <Text testID="kid-error" style={styles.error}>
+              {error}
+            </Text>
+          ) : null}
+        </ScrollView>
+        <PrimaryButton
+          label="Save"
+          testID="kid-save"
+          onPress={save}
+          minHeight={160}
+        />
+      </KeyboardAvoidingView>
+    </Screen>
+  );
+}
+
+const styles = StyleSheet.create((theme) => ({
+  form: {
+    flex: 1,
+  },
+  fields: {
+    flex: 1,
+  },
+  input: {
+    backgroundColor: theme.colors.card,
+    borderRadius: 16,
+    color: theme.colors.ink,
+    fontSize: 18,
+    marginTop: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  year: {
+    flex: 1.4,
+  },
+  datePart: {
+    flex: 1,
+  },
+  choice: {
+    borderColor: theme.colors.line,
+    borderRadius: theme.radius.button,
+    borderWidth: 1,
+    flex: 1,
+    marginTop: 16,
+    paddingVertical: 12,
+  },
+  choiceOn: {
+    borderColor: theme.colors.night,
+  },
+  choiceLabel: {
+    color: theme.colors.ink,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  icons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 16,
+  },
+  icon: {
+    borderColor: theme.colors.line,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 10,
+  },
+  glyph: {
+    fontSize: 28,
+  },
+  error: {
+    color: theme.colors.under,
+    fontSize: 16,
+    marginTop: 16,
+  },
+}));

@@ -13,4 +13,19 @@ module.exports = [
       '@typescript-eslint/no-empty-object-type': 'off',
     },
   },
+  {
+    files: ['e2e/**/*.js'],
+    languageOptions: {
+      globals: {
+        beforeAll: 'readonly',
+        by: 'readonly',
+        describe: 'readonly',
+        device: 'readonly',
+        element: 'readonly',
+        expect: 'readonly',
+        it: 'readonly',
+        waitFor: 'readonly',
+      },
+    },
+  },
 ];

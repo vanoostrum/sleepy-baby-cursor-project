@@ -19,3 +19,71 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm test
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci
+      - name: Generate the Android project
+        run: npx expo prebuild --platform android --non-interactive
+        env:
+          EXPO_NO_TELEMETRY: 1
+          CI: 1
+      - name: Install Android SDK packages
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME" -type f -name sdkmanager | head -1)"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
+      - name: Build the Android test APK
+        run: |
+          npx detox build --configuration android.emu.release
+          ls -lh android/app/build/outputs/apk/release/app-release.apk android/app/build/outputs/apk/androidTest/release/app-release-androidTest.apk
+          bash scripts/assert-release-bundle.sh
+      - name: Enable KVM when this runner has it
+        id: kvm
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules || true
+          sudo udevadm trigger --name-match=kvm || true
+          if [ ! -e /dev/kvm ]; then
+            sudo modprobe kvm || true
+            sudo modprobe kvm_intel || true
+            sudo modprobe kvm_amd || true
+          fi
+          if [ -e /dev/kvm ]; then
+            sudo chmod 666 /dev/kvm
+          fi
+          if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+            echo "KVM is available"
+            ls -l /dev/kvm
+            echo "disable=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "This runner has no usable /dev/kvm, so the emulator stays on software acceleration"
+            grep -E -o 'vmx|svm' /proc/cpuinfo | sort | uniq -c || true
+            echo "disable=auto" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Run Detox on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: default
+          arch: x86_64
+          profile: pixel_6
+          avd-name: SleepyBaby_API_34
+          disable-animations: true
+          disable-linux-hw-accel: ${{ steps.kvm.outputs.disable }}
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: bash scripts/e2e-android.sh
