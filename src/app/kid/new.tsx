@@ -1,5 +1,5 @@
 import { router, useNavigation } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -12,6 +12,9 @@ import {
 import { StyleSheet } from 'react-native-unistyles';
 
 import type { Gender, IconId } from '../../domain/model';
+import { asKidId } from '../../domain/model';
+import { dayKeyFromDate } from '../../domain/summary';
+import { previewNewKid } from '../../storage/db';
 import { useSleep } from '../../state/sleep';
 import { errorCopy } from '../../ui/errors';
 import { ICON_GLYPH, ICON_LIST } from '../../ui/icons';
@@ -25,11 +28,7 @@ const GENDERS: { id: Gender; label: string }[] = [
 
 export default function NewKidScreen() {
   const navigation = useNavigation();
-  const { log, refresh } = useSleep();
-  const logRef = useRef(log);
-  useEffect(() => {
-    logRef.current = log;
-  }, [log]);
+  const { rememberKid, persistKid } = useSleep();
   const [name, setName] = useState('');
   const [gender, setGender] = useState<Gender>('unspecified');
   const [year, setYear] = useState('');
@@ -77,12 +76,13 @@ export default function NewKidScreen() {
   }
 
   function replaceWithHome() {
+    console.info('kid-save about to replace');
+    router.replace('/');
     const state = navigation.getState();
     const homeName =
       state?.routeNames.find((name) => name === 'index') ??
       state?.routes[0]?.name ??
       'index';
-    console.info(`kid-save wrote the child, replacing with ${homeName}`);
     navigation.dispatch({
       type: 'RESET',
       payload: {
@@ -90,39 +90,40 @@ export default function NewKidScreen() {
         routes: [{ name: homeName }],
       },
     });
-    router.replace('/');
   }
 
-  async function save() {
+  function save() {
     console.info('kid-save onPress');
-    Keyboard.dismiss();
-    let current = logRef.current;
-    for (let attempt = 0; attempt < 30 && !current; attempt += 1) {
-      await new Promise((resolve) => {
-        setTimeout(resolve, 100);
+    try {
+      Keyboard.dismiss();
+      const draft = fields.current;
+      const input = {
+        name: draft.name,
+        gender: draft.gender,
+        birthday: `${draft.year.padStart(4, '0')}-${draft.month.padStart(2, '0')}-${draft.day.padStart(2, '0')}`,
+        icon: draft.icon,
+      };
+      const preview = previewNewKid(input, dayKeyFromDate(new Date()));
+      if (!preview.ok) {
+        console.info(`kid-save skipped: ${preview.error}`);
+        setError(errorCopy(preview.error));
+        return;
+      }
+      rememberKid({
+        id: asKidId(crypto.randomUUID()),
+        name: preview.value.name,
+        gender: preview.value.gender,
+        birthday: preview.value.birthday,
+        icon: preview.value.icon,
       });
-      current = logRef.current;
+      console.info('kid-save entered write');
+      persistKid(input);
+      replaceWithHome();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.info(`kid-save thrown: ${message}`);
+      setError(message);
     }
-    if (!current) {
-      console.info('kid-save skipped: sleep log is not open');
-      setError('Still opening the sleep log on this phone.');
-      return;
-    }
-    const draft = fields.current;
-    const birthday = `${draft.year.padStart(4, '0')}-${draft.month.padStart(2, '0')}-${draft.day.padStart(2, '0')}`;
-    const result = await current.addKid({
-      name: draft.name,
-      gender: draft.gender,
-      birthday,
-      icon: draft.icon,
-    });
-    if (!result.ok) {
-      console.info(`kid-save skipped: ${result.error}`);
-      setError(errorCopy(result.error));
-      return;
-    }
-    refresh();
-    replaceWithHome();
   }
 
   return (

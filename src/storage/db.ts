@@ -124,6 +124,38 @@ CREATE TABLE IF NOT EXISTS settings (
 
 type SqlRow = Record<string, SqlValue>;
 
+export function previewNewKid(
+  input: NewKid,
+  today: ReturnType<typeof dayKeyFromDate>,
+): StoreResult<Omit<Kid, 'id'>> {
+  const name = input.name.trim();
+  if (!name) {
+    return fail('empty-name');
+  }
+  if (name.length > 40) {
+    return fail('long-name');
+  }
+  if (!isGender(input.gender)) {
+    return fail('bad-gender');
+  }
+  if (!isIcon(input.icon)) {
+    return fail('bad-icon');
+  }
+  const birthday = parseDayKey(input.birthday);
+  if (!birthday) {
+    return fail('bad-birthday');
+  }
+  if (birthday > today) {
+    return fail('future-birthday');
+  }
+  return ok({
+    name,
+    gender: input.gender,
+    birthday,
+    icon: input.icon,
+  });
+}
+
 function ok<T>(value: T): StoreResult<T> {
   return { ok: true, value };
 }
@@ -266,26 +298,11 @@ export async function createSleepLog(
     },
 
     async addKid(input) {
-      const name = input.name.trim();
-      if (!name) {
-        return fail('empty-name');
+      const preview = previewNewKid(input, dayKeyFromDate(clock()));
+      if (!preview.ok) {
+        return preview;
       }
-      if (name.length > 40) {
-        return fail('long-name');
-      }
-      if (!isGender(input.gender)) {
-        return fail('bad-gender');
-      }
-      if (!isIcon(input.icon)) {
-        return fail('bad-icon');
-      }
-      const birthday = parseDayKey(input.birthday);
-      if (!birthday) {
-        return fail('bad-birthday');
-      }
-      if (birthday > dayKeyFromDate(clock())) {
-        return fail('future-birthday');
-      }
+      const { name, gender, birthday, icon } = preview.value;
       const id = asKidId(newId());
       await db.run(
         'INSERT INTO kids (id, name, gender, birthday, icon) VALUES ($id, $name, $gender, $birthday, $icon)',
@@ -315,9 +332,9 @@ export async function createSleepLog(
       return ok({
         id,
         name,
-        gender: input.gender,
+        gender,
         birthday,
-        icon: input.icon,
+        icon,
       });
     },
 

@@ -12,8 +12,7 @@ import { ICON_GLYPH } from '../ui/icons';
 import { Card, Muted, PrimaryButton, Screen, Title } from '../ui/screen';
 
 export default function HomeScreen() {
-  const { log, revision, refresh } = useSleep();
-  const [ready, setReady] = useState(false);
+  const { log, revision, refresh, remembered, settleWrite } = useSleep();
   const [kids, setKids] = useState<Kid[]>([]);
   const [active, setActive] = useState<Kid | null>(null);
   const [summary, setSummary] = useState<DaySummary | null>(null);
@@ -45,7 +44,6 @@ export default function HomeScreen() {
       setActive(nextActive);
       setSummary(nextDay && nextDay.ok ? nextDay.value : null);
       setOpen(nextOpen);
-      setReady(true);
     })();
     return () => {
       alive = false;
@@ -56,7 +54,17 @@ export default function HomeScreen() {
     if (!log) {
       return;
     }
-    const result = await log.startSleep(kidId, kind);
+    const pending = settleWrite();
+    let savedId = kidId;
+    if (pending) {
+      const saved = await pending;
+      if (!saved.ok) {
+        setError(errorCopy(saved.error));
+        return;
+      }
+      savedId = saved.value.id;
+    }
+    const result = await log.startSleep(savedId, kind);
     if (!result.ok) {
       setError(errorCopy(result.error));
       return;
@@ -65,7 +73,8 @@ export default function HomeScreen() {
     refresh();
   }
 
-  if (!log || !ready || !active) {
+  const shown = active ?? remembered;
+  if (!shown) {
     return (
       <Screen testID="home-screen">
         <View style={styles.empty}>
@@ -97,13 +106,13 @@ export default function HomeScreen() {
         style={styles.name}
         testID="active-kid-name"
       >
-        {active.name}
+        {shown.name}
       </Text>
       <View style={styles.header}>
-        <Text style={styles.glyph}>{ICON_GLYPH[active.icon]}</Text>
+        <Text style={styles.glyph}>{ICON_GLYPH[shown.icon]}</Text>
         <View style={styles.headerText}>
           <Text style={styles.age}>
-            {ageLabel(ageInMonths(active.birthday, new Date()))}
+            {ageLabel(ageInMonths(shown.birthday, new Date()))}
           </Text>
         </View>
       </View>
@@ -114,9 +123,12 @@ export default function HomeScreen() {
               key={kid.id}
               testID={`switch-${kid.id}`}
               onPress={() => {
+                if (!log) {
+                  return;
+                }
                 void log.setActiveKid(kid.id).then(() => refresh());
               }}
-              style={[styles.switch, kid.id === active.id && styles.switchOn]}
+              style={[styles.switch, kid.id === shown.id && styles.switchOn]}
             >
               <Text>{ICON_GLYPH[kid.icon]}</Text>
             </Pressable>
@@ -142,7 +154,10 @@ export default function HomeScreen() {
           label="Stop sleep"
           testID="stop-sleep"
           onPress={() => {
-            void log.stopSleep(active.id).then((result) => {
+            if (!log) {
+              return;
+            }
+            void log.stopSleep(shown.id).then((result) => {
               if (!result.ok) {
                 setError(errorCopy(result.error));
                 return;
@@ -157,7 +172,7 @@ export default function HomeScreen() {
           <Pressable
             testID="start-nap"
             onPress={() => {
-              void start(active.id, 'nap');
+              void start(shown.id, 'nap');
             }}
             style={styles.nap}
           >
@@ -166,7 +181,7 @@ export default function HomeScreen() {
           <Pressable
             testID="start-night"
             onPress={() => {
-              void start(active.id, 'night');
+              void start(shown.id, 'night');
             }}
             style={styles.night}
           >
