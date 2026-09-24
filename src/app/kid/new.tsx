@@ -15,6 +15,7 @@ import type { Gender, IconId } from '../../domain/model';
 import { asKidId } from '../../domain/model';
 import { dayKeyFromDate } from '../../domain/summary';
 import { previewNewKid } from '../../storage/db';
+import { localId } from '../../storage/localId';
 import { useSleep } from '../../state/sleep';
 import { errorCopy } from '../../ui/errors';
 import { ICON_GLYPH, ICON_LIST } from '../../ui/icons';
@@ -110,7 +111,7 @@ export default function NewKidScreen() {
         return;
       }
       rememberKid({
-        id: asKidId(crypto.randomUUID()),
+        id: asKidId(localId()),
         name: preview.value.name,
         gender: preview.value.gender,
         birthday: preview.value.birthday,

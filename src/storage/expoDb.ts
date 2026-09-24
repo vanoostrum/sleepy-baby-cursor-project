@@ -7,6 +7,7 @@ import {
   type SqlParams,
   type SqlValue,
 } from './db';
+import { localId } from './localId';
 
 function readRows(value: unknown): Record<string, SqlValue>[] {
   if (!Array.isArray(value)) {
@@ -50,5 +51,5 @@ export async function openSleepLog(
       return readRows(await database.getAllAsync(sql, params))[0];
     },
   };
-  return createSleepLog(db, clock, () => crypto.randomUUID());
+  return createSleepLog(db, clock, localId);
 }
