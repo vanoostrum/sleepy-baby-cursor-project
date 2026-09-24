@@ -39,10 +39,20 @@ async function logKidNameCase() {
       );
     }
   } catch (error) {
+    const message = String(error.message || error);
+    const ids = [
+      ...new Set(
+        [...message.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]),
+      ),
+    ];
+    console.log(
+      ids.length
+        ? `testIDs in hierarchy: ${ids.join(', ')}`
+        : 'testIDs in hierarchy: none',
+    );
     console.log(
       'active-kid-name is absent, save did not reach the home screen',
     );
-    console.log(String(error.message || error));
   }
 }
 
@@ -79,6 +89,9 @@ describe('SleepyBaby', () => {
       .withTimeout(20000);
     await element(by.id('add-kid')).tap();
 
+    await waitFor(element(by.id('new-kid-screen')))
+      .toBeVisible()
+      .withTimeout(10000);
     await waitFor(element(by.id('kid-name')))
       .toBeVisible()
       .withTimeout(10000);
@@ -88,10 +101,12 @@ describe('SleepyBaby', () => {
     await element(by.id('kid-month')).replaceText('6');
     await element(by.id('kid-day')).replaceText('1');
     await element(by.id('icon-star')).tap();
+    await waitFor(element(by.id('new-kid-screen')))
+      .toBeVisible()
+      .withTimeout(10000);
     await waitFor(element(by.id('kid-save')))
       .toBeVisible()
-      .whileElement(by.id('kid-form'))
-      .scroll(300, 'down');
+      .withTimeout(10000);
     await element(by.id('kid-save')).tap();
 
     try {

@@ -36,6 +36,44 @@ export default function NewKidScreen() {
   const [day, setDay] = useState('');
   const [icon, setIcon] = useState<IconId>('moon');
   const [error, setError] = useState('');
+  const fields = useRef({
+    name: '',
+    gender: 'unspecified' as Gender,
+    year: '',
+    month: '',
+    day: '',
+    icon: 'moon' as IconId,
+  });
+
+  function updateName(value: string) {
+    fields.current.name = value;
+    setName(value);
+  }
+
+  function updateGender(value: Gender) {
+    fields.current.gender = value;
+    setGender(value);
+  }
+
+  function updateYear(value: string) {
+    fields.current.year = value;
+    setYear(value);
+  }
+
+  function updateMonth(value: string) {
+    fields.current.month = value;
+    setMonth(value);
+  }
+
+  function updateDay(value: string) {
+    fields.current.day = value;
+    setDay(value);
+  }
+
+  function updateIcon(value: IconId) {
+    fields.current.icon = value;
+    setIcon(value);
+  }
 
   async function save() {
     Keyboard.dismiss();
@@ -50,15 +88,21 @@ export default function NewKidScreen() {
       setError('Still opening the sleep log on this phone.');
       return;
     }
-    const birthday = `${year.padStart(4, '0')}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-    const result = await current.addKid({ name, gender, birthday, icon });
+    const draft = fields.current;
+    const birthday = `${draft.year.padStart(4, '0')}-${draft.month.padStart(2, '0')}-${draft.day.padStart(2, '0')}`;
+    const result = await current.addKid({
+      name: draft.name,
+      gender: draft.gender,
+      birthday,
+      icon: draft.icon,
+    });
     if (!result.ok) {
       setError(errorCopy(result.error));
       return;
     }
     refresh();
     Keyboard.dismiss();
-    router.dismissTo('/');
+    router.replace('/');
   }
 
   return (
@@ -73,7 +117,7 @@ export default function NewKidScreen() {
           <TextInput
             testID="kid-name"
             value={name}
-            onChangeText={setName}
+            onChangeText={updateName}
             placeholder="Name"
             placeholderTextColor="#6E675C"
             style={styles.input}
@@ -83,7 +127,7 @@ export default function NewKidScreen() {
               <Pressable
                 key={option.id}
                 testID={`gender-${option.id}`}
-                onPress={() => setGender(option.id)}
+                onPress={() => updateGender(option.id)}
                 style={[styles.choice, gender === option.id && styles.choiceOn]}
               >
                 <Text style={styles.choiceLabel}>{option.label}</Text>
@@ -94,7 +138,7 @@ export default function NewKidScreen() {
             <TextInput
               testID="kid-year"
               value={year}
-              onChangeText={setYear}
+              onChangeText={updateYear}
               placeholder="Year"
               keyboardType="number-pad"
               placeholderTextColor="#6E675C"
@@ -103,7 +147,7 @@ export default function NewKidScreen() {
             <TextInput
               testID="kid-month"
               value={month}
-              onChangeText={setMonth}
+              onChangeText={updateMonth}
               placeholder="Month"
               keyboardType="number-pad"
               placeholderTextColor="#6E675C"
@@ -112,7 +156,7 @@ export default function NewKidScreen() {
             <TextInput
               testID="kid-day"
               value={day}
-              onChangeText={setDay}
+              onChangeText={updateDay}
               placeholder="Day"
               keyboardType="number-pad"
               placeholderTextColor="#6E675C"
@@ -124,7 +168,7 @@ export default function NewKidScreen() {
               <Pressable
                 key={id}
                 testID={`icon-${id}`}
-                onPress={() => setIcon(id)}
+                onPress={() => updateIcon(id)}
                 style={[styles.icon, icon === id && styles.choiceOn]}
               >
                 <Text style={styles.glyph}>{ICON_GLYPH[id]}</Text>
@@ -136,8 +180,8 @@ export default function NewKidScreen() {
               {error}
             </Text>
           ) : null}
-          <PrimaryButton label="Save" testID="kid-save" onPress={save} />
         </ScrollView>
+        <PrimaryButton label="Save" testID="kid-save" onPress={save} />
       </KeyboardAvoidingView>
     </Screen>
   );
