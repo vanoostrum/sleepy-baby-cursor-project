@@ -11,7 +11,7 @@ export function Screen({
   testID?: string;
 }) {
   return (
-    <SafeAreaView style={styles.screen} testID={testID}>
+    <SafeAreaView focusable style={styles.screen} testID={testID}>
       {children}
     </SafeAreaView>
   );

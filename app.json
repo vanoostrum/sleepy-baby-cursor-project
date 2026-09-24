@@ -45,7 +45,8 @@
         {
           "skipProguard": true
         }
-      ]
+      ],
+      "./plugins/withReleaseBundle.js"
     ]
   }
 }

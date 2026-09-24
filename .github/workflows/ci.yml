@@ -51,6 +51,7 @@ jobs:
         run: |
           npx detox build --configuration android.emu.release
           ls -lh android/app/build/outputs/apk/release/app-release.apk android/app/build/outputs/apk/androidTest/release/app-release-androidTest.apk
+          bash scripts/assert-release-bundle.sh
       - name: Run Detox on an emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:

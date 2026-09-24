@@ -13,4 +13,22 @@ install_apk() {
 
 install_apk android/app/build/outputs/apk/release/app-release.apk
 install_apk android/app/build/outputs/apk/androidTest/release/app-release-androidTest.apk
+
+adb -s emulator-5554 shell input keyevent KEYCODE_WAKEUP || true
+adb -s emulator-5554 shell wm dismiss-keyguard || true
+adb -s emulator-5554 logcat -c || true
+
+set +e
 npx detox test --configuration android.att.release --loglevel verbose --reuse
+status=$?
+set -e
+
+if [ "$status" -ne 0 ]; then
+  echo "----- device log -----"
+  adb -s emulator-5554 logcat -d -v time > /tmp/sleepybaby-logcat.txt || true
+  grep -E 'ReactNativeJS|AndroidRuntime|FATAL EXCEPTION|SleepyBaby|Unable to load|SoLoader|Unistyles|NitroModules|hermes' /tmp/sleepybaby-logcat.txt || true
+  echo "----- logcat tail -----"
+  tail -n 200 /tmp/sleepybaby-logcat.txt || true
+fi
+
+exit "$status"
