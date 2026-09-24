@@ -1,10 +1,54 @@
+const { execFileSync } = require('child_process');
+
+function adb(args) {
+  const home = process.env.ANDROID_HOME || '/usr/local/lib/android/sdk';
+  try {
+    return execFileSync(
+      `${home}/platform-tools/adb`,
+      ['-s', 'emulator-5554', ...args],
+      {
+        encoding: 'utf8',
+        maxBuffer: 10 * 1024 * 1024,
+      },
+    );
+  } catch (error) {
+    const stdout = error.stdout ? String(error.stdout) : '';
+    const stderr = error.stderr ? String(error.stderr) : '';
+    return `${stdout}\n${stderr}\n${error.message}`;
+  }
+}
+
+function dismissKeyguard() {
+  adb(['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP']);
+  adb(['shell', 'wm', 'dismiss-keyguard']);
+  adb(['shell', 'input', 'keyevent', '82']);
+}
+
+function reportForeignFocus() {
+  const dump = adb(['shell', 'dumpsys', 'window']);
+  const current = dump
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.startsWith('mCurrentFocus='));
+  const name = current ? current.slice('mCurrentFocus='.length) : 'unknown';
+  if (name.includes('com.sleepybaby.app')) {
+    return;
+  }
+  console.log('----- focused window -----');
+  console.log(`focused window: ${name}`);
+  console.log(dump);
+}
+
 describe('SleepyBaby', () => {
   beforeAll(async () => {
+    dismissKeyguard();
     await device.launchApp({
       newInstance: true,
       launchArgs: { detoxEnableSynchronization: 0 },
     });
     await device.disableSynchronization();
+    dismissKeyguard();
+    reportForeignFocus();
   });
 
   it('records a nap, corrects it, and shows the recommended range', async () => {

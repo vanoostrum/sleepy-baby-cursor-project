@@ -24,6 +24,16 @@ status=$?
 set -e
 
 if [ "$status" -ne 0 ]; then
+  echo "----- focused window -----"
+  dumpsys="$(adb -s emulator-5554 shell dumpsys window || true)"
+  current="$(printf '%s\n' "$dumpsys" | grep 'mCurrentFocus=' | head -1 | sed 's/^[[:space:]]*//')"
+  if [ -n "$current" ]; then
+    echo "focused window: ${current#mCurrentFocus=}"
+  else
+    echo "focused window: unknown"
+  fi
+  printf '%s\n' "$dumpsys" | grep -E 'mCurrentFocus|mFocusedApp|mHoldScreenWindow|mObscuringWindow' || true
+  echo "$dumpsys"
   echo "----- device log -----"
   adb -s emulator-5554 logcat -d -v time > /tmp/sleepybaby-logcat.txt || true
   grep -E 'ReactNativeJS|AndroidRuntime|FATAL EXCEPTION|SleepyBaby|Unable to load|SoLoader|Unistyles|NitroModules|hermes' /tmp/sleepybaby-logcat.txt || true
