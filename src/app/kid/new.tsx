@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   Keyboard,
@@ -24,6 +24,7 @@ const GENDERS: { id: Gender; label: string }[] = [
 ];
 
 export default function NewKidScreen() {
+  const navigation = useNavigation();
   const { log, refresh } = useSleep();
   const logRef = useRef(log);
   useEffect(() => {
@@ -75,7 +76,25 @@ export default function NewKidScreen() {
     setIcon(value);
   }
 
+  function replaceWithHome() {
+    const state = navigation.getState();
+    const homeName =
+      state?.routeNames.find((name) => name === 'index') ??
+      state?.routes[0]?.name ??
+      'index';
+    console.info(`kid-save wrote the child, replacing with ${homeName}`);
+    navigation.dispatch({
+      type: 'RESET',
+      payload: {
+        index: 0,
+        routes: [{ name: homeName }],
+      },
+    });
+    router.replace('/');
+  }
+
   async function save() {
+    console.info('kid-save onPress');
     Keyboard.dismiss();
     let current = logRef.current;
     for (let attempt = 0; attempt < 30 && !current; attempt += 1) {
@@ -85,6 +104,7 @@ export default function NewKidScreen() {
       current = logRef.current;
     }
     if (!current) {
+      console.info('kid-save skipped: sleep log is not open');
       setError('Still opening the sleep log on this phone.');
       return;
     }
@@ -97,12 +117,12 @@ export default function NewKidScreen() {
       icon: draft.icon,
     });
     if (!result.ok) {
+      console.info(`kid-save skipped: ${result.error}`);
       setError(errorCopy(result.error));
       return;
     }
     refresh();
-    Keyboard.dismiss();
-    router.replace('/');
+    replaceWithHome();
   }
 
   return (
@@ -112,6 +132,7 @@ export default function NewKidScreen() {
           testID="kid-form"
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
+          style={styles.fields}
         >
           <Title>Add a child</Title>
           <TextInput
@@ -181,7 +202,12 @@ export default function NewKidScreen() {
             </Text>
           ) : null}
         </ScrollView>
-        <PrimaryButton label="Save" testID="kid-save" onPress={save} />
+        <PrimaryButton
+          label="Save"
+          testID="kid-save"
+          onPress={save}
+          minHeight={160}
+        />
       </KeyboardAvoidingView>
     </Screen>
   );
@@ -189,6 +215,9 @@ export default function NewKidScreen() {
 
 const styles = StyleSheet.create((theme) => ({
   form: {
+    flex: 1,
+  },
+  fields: {
     flex: 1,
   },
   input: {

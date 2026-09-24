@@ -33,16 +33,22 @@ export function PrimaryButton({
   label,
   onPress,
   testID,
+  minHeight,
 }: {
   label: string;
   onPress: () => void;
   testID: string;
+  minHeight?: number;
 }) {
   return (
     <Pressable
       testID={testID}
       onPress={onPress}
-      style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+      style={({ pressed }) => [
+        styles.button,
+        minHeight != null ? { justifyContent: 'center', minHeight } : null,
+        pressed && minHeight == null && styles.buttonPressed,
+      ]}
     >
       <Text style={styles.buttonLabel}>{label}</Text>
     </Pressable>
