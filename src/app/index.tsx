@@ -83,12 +83,25 @@ export default function HomeScreen() {
 
   return (
     <Screen testID="home-screen">
-      <View collapsable={false} style={styles.header}>
+      <Text
+        numberOfLines={1}
+        onLayout={(event) => {
+          const { width, height, x, y } = event.nativeEvent.layout;
+          const large = width > 360 || height > 96;
+          console.info(
+            large
+              ? `active-kid-name is on a large parent ${Math.round(width)}x${Math.round(height)} at ${Math.round(x)},${Math.round(y)}`
+              : `active-kid-name text node ${Math.round(width)}x${Math.round(height)} at ${Math.round(x)},${Math.round(y)}`,
+          );
+        }}
+        style={styles.name}
+        testID="active-kid-name"
+      >
+        {active.name}
+      </Text>
+      <View style={styles.header}>
         <Text style={styles.glyph}>{ICON_GLYPH[active.icon]}</Text>
-        <View collapsable={false} style={styles.headerText}>
-          <Text style={styles.name} testID="active-kid-name">
-            {active.name}
-          </Text>
+        <View style={styles.headerText}>
           <Text style={styles.age}>
             {ageLabel(ageInMonths(active.birthday, new Date()))}
           </Text>
@@ -200,10 +213,11 @@ const styles = StyleSheet.create((theme) => ({
   name: {
     alignSelf: 'flex-start',
     color: theme.colors.ink,
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700',
-    lineHeight: 40,
-    minHeight: 40,
+    height: 48,
+    lineHeight: 48,
+    width: 200,
   },
   age: {
     color: theme.colors.muted,

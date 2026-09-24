@@ -58,11 +58,7 @@ export default function NewKidScreen() {
     }
     refresh();
     Keyboard.dismiss();
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/');
-    }
+    router.dismissTo('/');
   }
 
   return (

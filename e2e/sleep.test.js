@@ -24,38 +24,25 @@ function dismissKeyguard() {
   adb(['shell', 'input', 'keyevent', '82']);
 }
 
-function inputMethodShown() {
-  const dump = adb(['shell', 'dumpsys', 'input_method']);
-  return /mInputShown=true/.test(dump) || /mShowRequested=true/.test(dump);
-}
-
-async function revealSavedKid() {
+async function logKidNameCase() {
   try {
-    await waitFor(element(by.id('active-kid-name')))
-      .toBeVisible()
-      .withTimeout(3000);
-    return;
-  } catch {
-    // The name is still covered.
-  }
-  if (inputMethodShown()) {
-    await device.pressBack();
-  }
-  try {
-    await waitFor(element(by.id('active-kid-name')))
-      .toBeVisible()
-      .withTimeout(2000);
-    return;
-  } catch {
-    // The keyboard was not the only cover.
-  }
-  try {
-    await waitFor(element(by.id('new-kid-screen')))
-      .toBeVisible()
-      .withTimeout(1000);
-    await device.pressBack();
-  } catch {
-    // The form is not the screen in front.
+    const attrs = await element(by.id('active-kid-name')).getAttributes();
+    const frame = attrs.frame || { x: 0, y: 0, width: 0, height: 0 };
+    const text = attrs.text || '';
+    if (frame.width > 360 || frame.height > 96) {
+      console.log(
+        `active-kid-name is on a large parent (${frame.width}x${frame.height}, text="${text}")`,
+      );
+    } else {
+      console.log(
+        `active-kid-name is on the text node (${frame.width}x${frame.height} at ${frame.x},${frame.y}, text="${text}") and less than 75 percent of that node is inside the screen`,
+      );
+    }
+  } catch (error) {
+    console.log(
+      'active-kid-name is absent, save did not reach the home screen',
+    );
+    console.log(String(error.message || error));
   }
 }
 
@@ -106,11 +93,15 @@ describe('SleepyBaby', () => {
       .whileElement(by.id('kid-form'))
       .scroll(300, 'down');
     await element(by.id('kid-save')).tap();
-    await revealSavedKid();
 
-    await waitFor(element(by.id('active-kid-name')))
-      .toBeVisible()
-      .withTimeout(10000);
+    try {
+      await waitFor(element(by.id('active-kid-name')))
+        .toBeVisible()
+        .withTimeout(10000);
+    } catch (error) {
+      await logKidNameCase();
+      throw error;
+    }
     await expect(element(by.id('active-kid-name'))).toHaveText('Ada');
 
     await element(by.id('start-nap')).tap();
