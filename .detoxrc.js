@@ -17,6 +17,9 @@ module.exports = {
         'android/app/build/outputs/apk/androidTest/release/app-release-androidTest.apk',
       build:
         'cd android && ./gradlew :app:assembleRelease :app:assembleReleaseAndroidTest -DtestBuildType=release -PreactNativeArchitectures=x86_64 --stacktrace',
+      launchArgs: {
+        detoxEnableSynchronization: 0,
+      },
     },
   },
   devices: {

@@ -22,6 +22,9 @@ export default function TrendsScreen() {
   const [histogram, setHistogram] = useState<Histogram | null>(null);
 
   useEffect(() => {
+    if (!log) {
+      return;
+    }
     let alive = true;
     (async () => {
       const kid = await log.activeKid();

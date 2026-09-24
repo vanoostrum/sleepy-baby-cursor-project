@@ -21,6 +21,9 @@ export default function HomeScreen() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (!log) {
+      return;
+    }
     let alive = true;
     (async () => {
       const nextKids = await log.listKids();
@@ -44,6 +47,9 @@ export default function HomeScreen() {
   }, [log, revision]);
 
   async function start(kidId: Kid['id'], kind: SleepKind) {
+    if (!log) {
+      return;
+    }
     const result = await log.startSleep(kidId, kind);
     if (!result.ok) {
       setError(errorCopy(result.error));
@@ -53,11 +59,7 @@ export default function HomeScreen() {
     refresh();
   }
 
-  if (!ready) {
-    return <Screen testID="home-screen" />;
-  }
-
-  if (!active) {
+  if (!log || !ready || !active) {
     return (
       <Screen testID="home-screen">
         <View style={styles.empty}>

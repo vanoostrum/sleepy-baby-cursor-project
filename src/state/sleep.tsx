@@ -11,7 +11,7 @@ import type { SleepLog } from '../storage/db';
 import { openSleepLog } from '../storage/expoDb';
 
 type SleepState = {
-  log: SleepLog;
+  log: SleepLog | null;
   revision: number;
   refresh: () => void;
 };
@@ -38,20 +38,15 @@ export function SleepProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const value = useMemo(() => {
-    if (!log) {
-      return null;
-    }
-    return {
+  const value = useMemo(
+    () => ({
       log,
       revision,
       refresh: () => setRevision((current) => current + 1),
-    };
-  }, [log, revision]);
+    }),
+    [log, revision],
+  );
 
-  if (!value) {
-    return null;
-  }
   return (
     <SleepContext.Provider value={value}>{children}</SleepContext.Provider>
   );

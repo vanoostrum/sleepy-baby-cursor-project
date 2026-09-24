@@ -26,6 +26,9 @@ export default function NewKidScreen() {
   const [error, setError] = useState('');
 
   async function save() {
+    if (!log) {
+      return;
+    }
     const birthday = `${year.padStart(4, '0')}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
     const result = await log.addKid({ name, gender, birthday, icon });
     if (!result.ok) {

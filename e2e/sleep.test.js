@@ -1,6 +1,10 @@
 describe('SleepyBaby', () => {
   beforeAll(async () => {
-    await device.launchApp({ newInstance: true });
+    await device.launchApp({
+      newInstance: true,
+      launchArgs: { detoxEnableSynchronization: 0 },
+    });
+    await device.disableSynchronization();
   });
 
   it('records a nap, corrects it, and shows the recommended range', async () => {

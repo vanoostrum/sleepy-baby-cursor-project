@@ -22,6 +22,9 @@ export default function DayScreen() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (!log) {
+      return;
+    }
     let alive = true;
     (async () => {
       const kid = await log.activeKid();
@@ -43,7 +46,7 @@ export default function DayScreen() {
   }
 
   async function save() {
-    if (!editing) return;
+    if (!log || !editing) return;
     const startedAt = parseLocalInput(start);
     const endedAt = end.trim() === '' ? null : parseLocalInput(end);
     if (!startedAt || (end.trim() !== '' && !endedAt)) {
@@ -124,7 +127,7 @@ export default function DayScreen() {
               <Pressable
                 testID={`delete-${session.id}`}
                 onPress={() => {
-                  void log.removeSession(session.id).then(() => refresh());
+                  void log?.removeSession(session.id).then(() => refresh());
                 }}
               >
                 <Text style={styles.delete}>Remove</Text>
