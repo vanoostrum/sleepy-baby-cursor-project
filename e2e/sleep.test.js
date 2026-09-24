@@ -24,6 +24,41 @@ function dismissKeyguard() {
   adb(['shell', 'input', 'keyevent', '82']);
 }
 
+function inputMethodShown() {
+  const dump = adb(['shell', 'dumpsys', 'input_method']);
+  return /mInputShown=true/.test(dump) || /mShowRequested=true/.test(dump);
+}
+
+async function revealSavedKid() {
+  try {
+    await waitFor(element(by.id('active-kid-name')))
+      .toBeVisible()
+      .withTimeout(3000);
+    return;
+  } catch {
+    // The name is still covered.
+  }
+  if (inputMethodShown()) {
+    await device.pressBack();
+  }
+  try {
+    await waitFor(element(by.id('active-kid-name')))
+      .toBeVisible()
+      .withTimeout(2000);
+    return;
+  } catch {
+    // The keyboard was not the only cover.
+  }
+  try {
+    await waitFor(element(by.id('new-kid-screen')))
+      .toBeVisible()
+      .withTimeout(1000);
+    await device.pressBack();
+  } catch {
+    // The form is not the screen in front.
+  }
+}
+
 function reportForeignFocus() {
   const dump = adb(['shell', 'dumpsys', 'window']);
   const current = dump
@@ -71,6 +106,7 @@ describe('SleepyBaby', () => {
       .whileElement(by.id('kid-form'))
       .scroll(300, 'down');
     await element(by.id('kid-save')).tap();
+    await revealSavedKid();
 
     await waitFor(element(by.id('active-kid-name')))
       .toBeVisible()

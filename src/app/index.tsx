@@ -1,6 +1,6 @@
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { Keyboard, Pressable, Text, View } from 'react-native';
 import { StyleSheet } from 'react-native-unistyles';
 
 import type { DaySummary, Kid, SleepKind, SleepSession } from '../domain/model';
@@ -19,6 +19,12 @@ export default function HomeScreen() {
   const [summary, setSummary] = useState<DaySummary | null>(null);
   const [open, setOpen] = useState<SleepSession | null>(null);
   const [error, setError] = useState('');
+
+  useFocusEffect(
+    useCallback(() => {
+      Keyboard.dismiss();
+    }, []),
+  );
 
   useEffect(() => {
     if (!log) {
@@ -77,9 +83,9 @@ export default function HomeScreen() {
 
   return (
     <Screen testID="home-screen">
-      <View style={styles.header}>
+      <View collapsable={false} style={styles.header}>
         <Text style={styles.glyph}>{ICON_GLYPH[active.icon]}</Text>
-        <View style={styles.headerText}>
+        <View collapsable={false} style={styles.headerText}>
           <Text style={styles.name} testID="active-kid-name">
             {active.name}
           </Text>
@@ -192,9 +198,12 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
   },
   name: {
+    alignSelf: 'flex-start',
     color: theme.colors.ink,
     fontSize: 32,
     fontWeight: '700',
+    lineHeight: 40,
+    minHeight: 40,
   },
   age: {
     color: theme.colors.muted,
